@@ -46,11 +46,12 @@ class Program2(config: Config, logger: Logger, statsD: StatsD) extends Program("
   type StatsdCounterWriter[A] = Writer[StatsD.Counter, A]
   type StatsdTimingWriter[A] = Writer[StatsD.Timing, A]
 
-  type Stack = Fx.fx5[ConfigReader, LogWriter, StatsdCounterWriter, StatsdTimingWriter, Eval]
   type _config[R] = ConfigReader |= R
   type _log[R] = LogWriter |= R
   type _statsdCounter[R] = StatsdCounterWriter |= R
   type _statsdTiming[R] = StatsdTimingWriter |= R
+
+  type Stack = Fx.fx5[ConfigReader, LogWriter, StatsdCounterWriter, StatsdTimingWriter, Eval]
 
   def computer[R: _config : _log : _statsdCounter : _eval]: Eff[R, Long] =
     for {
@@ -101,7 +102,7 @@ object ProgramApp extends App {
   }
 
   val cfg = MapConfig("a" -> 1231L, "b" -> -23412L, "statsd.label" -> "boo")
-//  val cfg = MapConfig("a" -> 1231L, "b" -> 0L, "statsd.label" -> "boo")
+  //  val cfg = MapConfig("a" -> 1231L, "b" -> 0L, "statsd.label" -> "boo")
 
   runProgram(new Program2(
     config = cfg,

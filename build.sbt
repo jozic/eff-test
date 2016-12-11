@@ -7,4 +7,5 @@ scalaVersion := "2.12.1"
 libraryDependencies += "org.atnos" %% "eff" % "2.0.2"
 
 scalacOptions ++= Seq("-Ypartial-unification")
-    
+
+addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.3")
