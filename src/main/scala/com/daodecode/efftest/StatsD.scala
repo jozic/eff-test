@@ -14,13 +14,20 @@ trait StatsD {
 
   def timing(label: String, time: Long = 1): Unit = timing(Timing(label, time))
 
+  def send(m: Metric): Unit = m match {
+    case c: Counter => increment(c)
+    case t: Timing => timing(t)
+  }
+
 }
 
 object StatsD {
 
-  case class Counter(label: String, count: Long = 1)
+  sealed trait Metric
 
-  case class Timing(label: String, time: Long)
+  case class Counter(label: String, count: Long = 1) extends Metric
+
+  case class Timing(label: String, time: Long) extends Metric
 
 }
 

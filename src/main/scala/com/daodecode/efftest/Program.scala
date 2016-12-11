@@ -41,46 +41,46 @@ class Program2(config: Config, logger: Logger, statsD: StatsD) extends Program("
   import org.atnos.eff._, all._
   import org.atnos.eff.syntax.all._
 
+  import StatsD._
+  import Logger._
+
   type ConfigReader[A] = Reader[Config, A]
-  type LogWriter[A] = Writer[String, A]
-  type StatsdCounterWriter[A] = Writer[StatsD.Counter, A]
-  type StatsdTimingWriter[A] = Writer[StatsD.Timing, A]
+  type LogWriter[A] = Writer[LogEntry, A]
+  type StatsdWriter[A] = Writer[Metric, A]
 
   type _config[R] = ConfigReader |= R
   type _log[R] = LogWriter |= R
-  type _statsdCounter[R] = StatsdCounterWriter |= R
-  type _statsdTiming[R] = StatsdTimingWriter |= R
+  type _statsd[R] = StatsdWriter |= R
 
-  type Stack = Fx.fx5[ConfigReader, LogWriter, StatsdCounterWriter, StatsdTimingWriter, Eval]
+  type Stack = Fx.fx4[ConfigReader, LogWriter, StatsdWriter, Eval]
 
-  def computer[R: _config : _log : _statsdCounter : _eval]: Eff[R, Long] =
+  def computer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
     for {
-      _ <- tell("reading a and b")
+      _ <- tell[R, LogEntry](Debug("reading a and b"))
       cfg <- ask
       a <- pure(cfg.long("a"))
       b <- pure(cfg.long("b"))
-      _ <- tell(s"a is [$a], b is [$b]")
+      _ <- tell[R, LogEntry](Info(s"a is [$a], b is [$b]"))
       label <- pure(cfg.string("statsd.label"))
-      _ <- tell(StatsD.Counter(s"$label.a", a))
-      _ <- tell(StatsD.Counter(s"$label.b", b))
+      _ <- tell[R, Metric](Counter(s"$label.a", a))
+      _ <- tell[R, Metric](Counter(s"$label.b", b))
       result <- delay(someCompute(a, b))
-      _ <- tell(StatsD.Counter(s"$label.result", result))
+      _ <- tell[R, Metric](Counter(s"$label.result", result))
     } yield result
 
   // not safe, use Safe/andFinally
-  def withTimer[R: _config : _log : _statsdCounter : _statsdTiming : _eval]: Eff[R, Long] =
+  def withTimer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
     for {
       start <- pure(System.currentTimeMillis())
       result <- computer
-      _ <- tell(StatsD.Timing("compute.time", System.currentTimeMillis() - start))
+      _ <- tell[R, Metric](Timing("compute.time", System.currentTimeMillis() - start))
     } yield result
 
   override def compute(): Long = {
     withTimer[Stack]
       .runReader(config)
-      .runWriterUnsafe[String](logger.debug(_))
-      .runWriterUnsafe[StatsD.Counter](statsD.increment)
-      .runWriterUnsafe[StatsD.Timing](statsD.timing)
+      .runWriterUnsafe[LogEntry](logger.log)
+      .runWriterUnsafe[Metric](statsD.send)
       .runEval
       .run
   }
