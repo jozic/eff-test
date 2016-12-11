@@ -56,16 +56,16 @@ class Program2(config: Config, logger: Logger, statsD: StatsD) extends Program("
 
   def computer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
     for {
-      _ <- tell[R, LogEntry](Debug("reading a and b"))
+      _ <- tell(debug("reading a and b"))
       cfg <- ask
       a <- pure(cfg.long("a"))
       b <- pure(cfg.long("b"))
-      _ <- tell[R, LogEntry](Info(s"a is [$a], b is [$b]"))
+      _ <- tell(info(s"a is [$a], b is [$b]"))
       label <- pure(cfg.string("statsd.label"))
-      _ <- tell[R, Metric](Counter(s"$label.a", a))
-      _ <- tell[R, Metric](Counter(s"$label.b", b))
+      _ <- tell(counter(s"$label.a", a))
+      _ <- tell(counter(s"$label.b", b))
       result <- delay(someCompute(a, b))
-      _ <- tell[R, Metric](Counter(s"$label.result", result))
+      _ <- tell(counter(s"$label.result", result))
     } yield result
 
   // not safe, use Safe/andFinally
@@ -73,7 +73,7 @@ class Program2(config: Config, logger: Logger, statsD: StatsD) extends Program("
     for {
       start <- pure(System.currentTimeMillis())
       result <- computer
-      _ <- tell[R, Metric](Timing("compute.time", System.currentTimeMillis() - start))
+      _ <- tell(timing("compute.time", System.currentTimeMillis() - start))
     } yield result
 
   override def compute(): Long = {

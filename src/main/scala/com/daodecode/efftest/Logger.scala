@@ -33,7 +33,16 @@ object Logger {
   sealed abstract class LogEntry(val level: Level, val m: String, val to: Option[Throwable] = None)
 
   case class Info(msg: String) extends LogEntry(InfoLevel, msg)
+
   case class Debug(msg: String) extends LogEntry(DebugLevel, msg)
+
+  case class Error(msg: String, tho: Option[Throwable] = None) extends LogEntry(ErrorLevel, msg, tho)
+
+  def info(msg: String): LogEntry = Info(msg)
+
+  def debug(msg: String): LogEntry = Debug(msg)
+
+  def error(msg: String, to: Option[Throwable] = None): LogEntry = Error(msg, to)
 
 }
 

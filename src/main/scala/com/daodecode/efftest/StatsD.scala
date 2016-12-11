@@ -29,6 +29,10 @@ object StatsD {
 
   case class Timing(label: String, time: Long) extends Metric
 
+  def timing(label: String, time: Long): Metric = Timing(label, time)
+
+  def counter(label: String, count: Long = 1): Metric = Counter(label, count)
+
 }
 
 object ConsoleStatsD extends StatsD {
