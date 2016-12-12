@@ -56,8 +56,8 @@ class Program2(config: Config, logger: Logger, statsD: StatsD) extends Program("
 
   def computer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
     for {
-      _ <- tell(debug("reading a and b"))
       cfg <- ask
+      _ <- tell(debug("reading a and b"))
       a <- pure(cfg.long("a"))
       b <- pure(cfg.long("b"))
       _ <- tell(info(s"a is [$a], b is [$b]"))
@@ -81,6 +81,99 @@ class Program2(config: Config, logger: Logger, statsD: StatsD) extends Program("
       .runReader(config)
       .runWriterUnsafe[LogEntry](logger.log)
       .runWriterUnsafe[Metric](statsD.send)
+      .runEval
+      .run
+  }
+
+}
+
+trait EffLogger {
+
+  import cats.data.Writer
+  import org.atnos.eff._, all._
+  import Logger._
+
+  type LogWriter[A] = Writer[LogEntry, A]
+  type _log[R] = LogWriter |= R
+
+  def info[R: _log](s: => String): Eff[R, Unit] = for {
+    _ <- tell[R, LogEntry](Info(s))
+  } yield ()
+
+  def debug[R: _log](s: => String): Eff[R, Unit] = for {
+    _ <- tell[R, LogEntry](Debug(s))
+  } yield ()
+
+  def error[R: _log](s: => String): Eff[R, Unit] = for {
+    _ <- tell[R, LogEntry](Error(s))
+  } yield ()
+
+  def error[R: _log](s: => String, t: Throwable): Eff[R, Unit] = for {
+    _ <- tell[R, LogEntry](Error(s, Some(t)))
+  } yield ()
+
+}
+
+trait EffStatsD {
+
+  import cats.data.Writer
+  import org.atnos.eff._, all._
+
+  import StatsD._
+
+  type StatsdWriter[A] = Writer[Metric, A]
+  type _statsd[R] = StatsdWriter |= R
+
+  def counter[R: _statsd](label: String, count: Long = 1): Eff[R, Unit] = for {
+    _ <- tell[R, Metric](Counter(label, count))
+  } yield ()
+
+  def timing[R: _statsd](label: String, time: Long): Eff[R, Unit] = for {
+    _ <- tell[R, Metric](Timing(label, time))
+  } yield ()
+
+}
+
+class Program3(config: Config, logger: Logger, statsD: StatsD)
+  extends Program("effs-again") with EffLogger with EffStatsD {
+
+  import cats._, data._
+  import org.atnos.eff._, all._
+  import org.atnos.eff.syntax.all._
+
+  type ConfigReader[A] = Reader[Config, A]
+
+  type _config[R] = ConfigReader |= R
+
+  type Stack = Fx.fx4[ConfigReader, LogWriter, StatsdWriter, Eval]
+
+  def computer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
+    for {
+      cfg <- ask
+      _ <- debug("reading a and b")
+      a <- pure(cfg.long("a"))
+      b <- pure(cfg.long("b"))
+      _ <- info(s"a is [$a], b is [$b]")
+      label <- pure(cfg.string("statsd.label"))
+      _ <- counter(s"$label.a", a)
+      _ <- counter(s"$label.b", b)
+      result <- delay(someCompute(a, b))
+      _ <- counter(s"$label.result", result)
+    } yield result
+
+  // not safe, use Safe/andFinally
+  def withTimer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
+    for {
+      start <- pure(System.currentTimeMillis())
+      result <- computer
+      _ <- timing("compute.time", System.currentTimeMillis() - start)
+    } yield result
+
+  override def compute(): Long = {
+    withTimer[Stack]
+      .runReader(config)
+      .runWriterUnsafe[Logger.LogEntry](logger.log)
+      .runWriterUnsafe[StatsD.Metric](statsD.send)
       .runEval
       .run
   }
@@ -111,6 +204,12 @@ object ProgramApp extends App {
   ))
 
   runProgram(new Program1(
+    config = cfg,
+    logger = ConsoleLogger,
+    statsD = ConsoleStatsD
+  ))
+
+  runProgram(new Program3(
     config = cfg,
     logger = ConsoleLogger,
     statsD = ConsoleStatsD
