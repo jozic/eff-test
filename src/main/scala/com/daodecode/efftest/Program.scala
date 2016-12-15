@@ -85,53 +85,6 @@ class Program2(config: Config, logger: Logger, statsD: StatsD) extends Program("
 
 }
 
-trait EffLogger {
-
-  import cats.data.Writer
-  import org.atnos.eff._, all._
-  import Logger._
-
-  type LogWriter[A] = Writer[LogEntry, A]
-  type _log[R] = LogWriter |= R
-
-  def info[R: _log](s: => String): Eff[R, Unit] = for {
-    _ <- tell[R, LogEntry](Info(s))
-  } yield ()
-
-  def debug[R: _log](s: => String): Eff[R, Unit] = for {
-    _ <- tell[R, LogEntry](Debug(s))
-  } yield ()
-
-  def error[R: _log](s: => String): Eff[R, Unit] = for {
-    _ <- tell[R, LogEntry](Error(s))
-  } yield ()
-
-  def error[R: _log](s: => String, t: Throwable): Eff[R, Unit] = for {
-    _ <- tell[R, LogEntry](Error(s, Some(t)))
-  } yield ()
-
-}
-
-trait EffStatsD {
-
-  import cats.data.Writer
-  import org.atnos.eff._, all._
-
-  import StatsD._
-
-  type StatsdWriter[A] = Writer[Metric, A]
-  type _statsd[R] = StatsdWriter |= R
-
-  def counter[R: _statsd](label: String, count: Long = 1): Eff[R, Unit] = for {
-    _ <- tell[R, Metric](Counter(label, count))
-  } yield ()
-
-  def timing[R: _statsd](label: String, time: Long): Eff[R, Unit] = for {
-    _ <- tell[R, Metric](Timing(label, time))
-  } yield ()
-
-}
-
 class Program3(config: Config, logger: Logger, statsD: StatsD)
   extends Program("effs-again") with EffLogger with EffStatsD {
 
@@ -157,15 +110,6 @@ class Program3(config: Config, logger: Logger, statsD: StatsD)
       _ <- counter(s"$label.b", b)
       result <- protect(someCompute(a, b))
       _ <- counter(s"$label.result", result)
-    } yield result
-
-  // timing is not correct
-  def withTiming[R: _statsd : _Safe, A](label: String)(eff: Eff[R, A]): Eff[R, A] =
-    for {
-      start <- protect(System.currentTimeMillis())
-      result <- eff.thenFinally {
-        timing(label, System.currentTimeMillis() - start)
-      }
     } yield result
 
   def withTimer = withTiming("compute.time")(computer[Stack])
