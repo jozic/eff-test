@@ -1,15 +1,13 @@
 package com.daodecode.efftest
 
-import math._
-
 abstract class Program(val name: String) {
   def compute(): Long
 
   // some computation that takes some time and can throw an error
-  protected def someCompute(a: Long, b: Long): Long =
-    (0 to abs(max(abs(a), abs(b)).toInt)).map { i =>
-      (util.Random.nextLong() + a / b) * b + i
-    }.max
+  protected def someCompute(a: Long, b: Long): Long = {
+    Thread.sleep(100)
+    (util.Random.nextLong() + a / b) * b
+  }
 
 }
 
@@ -145,37 +143,40 @@ class Program3(config: Config, logger: Logger, statsD: StatsD)
 
   type _config[R] = ConfigReader |= R
 
-  type Stack = Fx.fx4[ConfigReader, LogWriter, StatsdWriter, Eval]
+  type Stack = Fx.fx4[ConfigReader, LogWriter, StatsdWriter, Safe]
 
-  def computer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
+  def computer[R: _config : _log : _statsd : _Safe]: Eff[R, Long] =
     for {
       cfg <- ask
       _ <- debug("reading a and b")
-      a <- pure(cfg.long("a"))
-      b <- pure(cfg.long("b"))
+      a <- protect(cfg.long("a"))
+      b <- protect(cfg.long("b"))
       _ <- info(s"a is [$a], b is [$b]")
       label <- pure(cfg.string("statsd.label"))
       _ <- counter(s"$label.a", a)
       _ <- counter(s"$label.b", b)
-      result <- delay(someCompute(a, b))
+      result <- protect(someCompute(a, b))
       _ <- counter(s"$label.result", result)
     } yield result
 
-  // not safe, use Safe/andFinally
-  def withTimer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
+  // timing is not correct
+  def withTiming[R: _statsd : _Safe, A](label: String)(eff: Eff[R, A]): Eff[R, A] =
     for {
-      start <- pure(System.currentTimeMillis())
-      result <- computer
-      _ <- timing("compute.time", System.currentTimeMillis() - start)
+      start <- protect(System.currentTimeMillis())
+      result <- eff.thenFinally {
+        timing(label, System.currentTimeMillis() - start)
+      }
     } yield result
 
-  override def compute(): Long = {
-    withTimer[Stack]
+  def withTimer = withTiming("compute.time")(computer[Stack])
+
+  def compute(): Long = {
+    withTimer
       .runReader(config)
       .runWriterUnsafe[Logger.LogEntry](logger.log)
       .runWriterUnsafe[StatsD.Metric](statsD.send)
-      .runEval
-      .run
+      .execSafe
+      .run.toTry.get
   }
 
 }
@@ -195,7 +196,7 @@ object ProgramApp extends App {
   }
 
   val cfg = MapConfig("a" -> 1231L, "b" -> -23412L, "statsd.label" -> "boo")
-  //  val cfg = MapConfig("a" -> 1231L, "b" -> 0L, "statsd.label" -> "boo")
+//    val cfg = MapConfig("a" -> 1231L, "b1" -> 0L, "statsd.label" -> "boo")
 
   runProgram(new Program2(
     config = cfg,
