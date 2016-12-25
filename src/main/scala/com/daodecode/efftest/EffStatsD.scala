@@ -17,9 +17,8 @@ trait EffStatsD {
 
   def counter[R: _statsd](label: String, count: Long = 1): Eff[R, Unit] = send(Counter(label, count))
 
-  def timing[R: _statsd](label: String, time: Long): Eff[R, Unit] = send(Timing(label, time))
+  def timing[R: _statsd](label: String, time: => Long): Eff[R, Unit] = send(new Timing(label, time))
 
-  // timing is not correct
   def withTiming[R: _statsd : _Safe, A](label: String)(eff: Eff[R, A]): Eff[R, A] =
     for {
       start <- protect(System.currentTimeMillis())

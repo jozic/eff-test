@@ -10,9 +10,9 @@ trait StatsD {
 
   def increment(label: String, counter: Long = 1): Unit = increment(Counter(label, counter))
 
-  def timing(t: Timing): Unit
+  def timing(t: => Timing): Unit
 
-  def timing(label: String, time: Long = 1): Unit = timing(Timing(label, time))
+  def timing(label: String, t: => Long): Unit = timing(new Timing(label, t))
 
   def send(m: Metric): Unit = m match {
     case c: Counter => increment(c)
@@ -27,7 +27,9 @@ object StatsD {
 
   case class Counter(label: String, count: Long = 1) extends Metric
 
-  case class Timing(label: String, time: Long) extends Metric
+  class Timing(val label: String, t: => Long) extends Metric {
+    lazy val time = t
+  }
 
 }
 
@@ -37,7 +39,7 @@ object ConsoleStatsD extends StatsD {
     println(s"STATSD: incrementing [${c.label}] by ${c.count}")
   }
 
-  override def timing(t: Timing): Unit = {
+  override def timing(t: => Timing): Unit = {
     println(s"STATSD: recording timing of [${t.label}]: ${t.time}")
   }
 }
