@@ -11,9 +11,7 @@ trait EffStatsD {
   type StatsdWriter[A] = Writer[Metric, A]
   type _statsd[R] = StatsdWriter |= R
 
-  private def send[R: _statsd](metric: Metric): Eff[R, Unit] = for {
-    _ <- tell(metric)
-  } yield ()
+  private def send[R: _statsd](metric: Metric): Eff[R, Unit] = tell(metric)
 
   def counter[R: _statsd](label: String, count: Long = 1): Eff[R, Unit] = send(Counter(label, count))
 

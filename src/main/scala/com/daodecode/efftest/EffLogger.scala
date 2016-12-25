@@ -9,6 +9,8 @@ trait EffLogger {
   type LogWriter[A] = Writer[LogEntry, A]
   type _log[R] = LogWriter |= R
 
+  private def log[R: _log](logEntry: LogEntry): Eff[R, Unit] = tell(logEntry)
+
   def debug[R: _log](s: => String): Eff[R, Unit] = log(new Debug(s))
 
   def info[R: _log](s: => String): Eff[R, Unit] = log(new Info(s))
@@ -18,9 +20,5 @@ trait EffLogger {
   def error[R: _log](s: => String): Eff[R, Unit] = log(new Error(s))
 
   def error[R: _log](s: => String, t: Throwable): Eff[R, Unit] = log(new Error(s, Some(t)))
-
-  private def log[R: _log](logEntry: LogEntry): Eff[R, Unit] = for {
-    _ <- tell(logEntry)
-  } yield ()
 
 }
