@@ -11,13 +11,13 @@ trait EffStatsD {
   type StatsdWriter[A] = Writer[Metric, A]
   type _statsd[R] = StatsdWriter |= R
 
-  def counter[R: _statsd](label: String, count: Long = 1): Eff[R, Unit] = for {
-    _ <- tell[R, Metric](Counter(label, count))
+  private def send[R: _statsd](metric: Metric): Eff[R, Unit] = for {
+    _ <- tell(metric)
   } yield ()
 
-  def timing[R: _statsd](label: String, time: Long): Eff[R, Unit] = for {
-    _ <- tell[R, Metric](Timing(label, time))
-  } yield ()
+  def counter[R: _statsd](label: String, count: Long = 1): Eff[R, Unit] = send(Counter(label, count))
+
+  def timing[R: _statsd](label: String, time: Long): Eff[R, Unit] = send(Timing(label, time))
 
   // timing is not correct
   def withTiming[R: _statsd : _Safe, A](label: String)(eff: Eff[R, A]): Eff[R, A] =

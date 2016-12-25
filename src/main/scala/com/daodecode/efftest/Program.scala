@@ -33,59 +33,7 @@ class Program1(config: Config, logger: Logger, statsD: StatsD) extends Program("
 
 }
 
-class Program2(config: Config, logger: Logger, statsD: StatsD) extends Program("first-effs") {
-
-  import cats._, data._
-  import org.atnos.eff._, all._
-  import org.atnos.eff.syntax.all._
-
-  import StatsD._
-  import Logger._
-
-  type ConfigReader[A] = Reader[Config, A]
-  type LogWriter[A] = Writer[LogEntry, A]
-  type StatsdWriter[A] = Writer[Metric, A]
-
-  type _config[R] = ConfigReader |= R
-  type _log[R] = LogWriter |= R
-  type _statsd[R] = StatsdWriter |= R
-
-  type Stack = Fx.fx4[ConfigReader, LogWriter, StatsdWriter, Eval]
-
-  def computer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
-    for {
-      cfg <- ask
-      _ <- tell(debug("reading a and b"))
-      a <- pure(cfg.long("a"))
-      b <- pure(cfg.long("b"))
-      _ <- tell(info(s"a is [$a], b is [$b]"))
-      label <- pure(cfg.string("statsd.label"))
-      _ <- tell(counter(s"$label.a", a))
-      _ <- tell(counter(s"$label.b", b))
-      result <- delay(someCompute(a, b))
-      _ <- tell(counter(s"$label.result", result))
-    } yield result
-
-  // not safe, use Safe/andFinally
-  def withTimer[R: _config : _log : _statsd : _eval]: Eff[R, Long] =
-    for {
-      start <- pure(System.currentTimeMillis())
-      result <- computer
-      _ <- tell(timing("compute.time", System.currentTimeMillis() - start))
-    } yield result
-
-  override def compute(): Long = {
-    withTimer[Stack]
-      .runReader(config)
-      .runWriterUnsafe[LogEntry](logger.log)
-      .runWriterUnsafe[Metric](statsD.send)
-      .runEval
-      .run
-  }
-
-}
-
-class Program3(config: Config, logger: Logger, statsD: StatsD)
+class Program2(config: Config, logger: Logger, statsD: StatsD)
   extends Program("effs-again") with EffLogger with EffStatsD {
 
   import cats._, data._
@@ -142,19 +90,13 @@ object ProgramApp extends App {
   val cfg = MapConfig("a" -> 1231L, "b" -> -23412L, "statsd.label" -> "boo")
 //    val cfg = MapConfig("a" -> 1231L, "b1" -> 0L, "statsd.label" -> "boo")
 
-  runProgram(new Program2(
-    config = cfg,
-    logger = ConsoleLogger,
-    statsD = ConsoleStatsD
-  ))
-
   runProgram(new Program1(
     config = cfg,
     logger = ConsoleLogger,
     statsD = ConsoleStatsD
   ))
 
-  runProgram(new Program3(
+  runProgram(new Program2(
     config = cfg,
     logger = ConsoleLogger,
     statsD = ConsoleStatsD

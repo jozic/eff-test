@@ -8,56 +8,50 @@ trait Logger {
 
   def debug(m: => String): Unit
 
-  def error(m: => String, to: Option[Throwable] = None): Unit
+  def warn(m: => String): Unit
 
-  def log(level: Level, m: => String, to: Option[Throwable] = None): Unit = level match {
-    case InfoLevel => info(m)
-    case DebugLevel => debug(m)
-    case ErrorLevel => error(m, to)
+  def error(m: => String, to: => Option[Throwable] = None): Unit
+
+  def log(entry: LogEntry): Unit = entry match {
+    case _: Debug => debug(entry.message)
+    case _: Info => info(entry.message)
+    case _: Warn => warn(entry.message)
+    case _: Error => error(entry.message, entry.ex)
   }
-
-  def log(entry: LogEntry): Unit = log(entry.level, entry.m, entry.to)
 
 }
 
 object Logger {
 
-  sealed trait Level
+  sealed abstract class LogEntry(m: => String, tho: => Option[Throwable] = None) {
+    lazy val message: String = m
+    lazy val ex: Option[Throwable] = tho
+  }
 
-  case object InfoLevel extends Level
+  class Debug(msg: => String) extends LogEntry(msg)
 
-  case object DebugLevel extends Level
+  class Info(msg: => String) extends LogEntry(msg)
 
-  case object ErrorLevel extends Level
+  class Warn(msg: => String) extends LogEntry(msg)
 
-  sealed abstract class LogEntry(val level: Level, val m: String, val to: Option[Throwable] = None)
-
-  case class Info(msg: String) extends LogEntry(InfoLevel, msg)
-
-  case class Debug(msg: String) extends LogEntry(DebugLevel, msg)
-
-  case class Error(msg: String, tho: Option[Throwable] = None) extends LogEntry(ErrorLevel, msg, tho)
-
-  def info(msg: String): LogEntry = Info(msg)
-
-  def debug(msg: String): LogEntry = Debug(msg)
-
-  def error(msg: String, to: Option[Throwable] = None): LogEntry = Error(msg, to)
+  class Error(msg: => String, tho: => Option[Throwable] = None) extends LogEntry(msg, tho)
 
 }
 
 object ConsoleLogger extends Logger {
-  override def info(m: => String): Unit = {
-    println(s"INFO: $m")
-  }
-
   override def debug(m: => String): Unit = {
     println(s"DEBUG: $m")
   }
 
-  override def error(m: => String, to: Option[Throwable] = None): Unit = {
+  override def info(m: => String): Unit = {
+    println(s"INFO: $m")
+  }
+
+  override def warn(m: => String): Unit = {
+    println(s"WARN: $m")
+  }
+
+  override def error(m: => String, to: => Option[Throwable] = None): Unit = {
     println(s"ERROR: $m${to.map(t => s"caused by ${t.getMessage}").getOrElse("")}")
   }
 }
-
-
