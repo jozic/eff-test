@@ -34,12 +34,13 @@ class Program1(config: Config, logger: Logger, statsD: StatsD) extends Program("
 }
 
 class Program2(config: Config, logger: Logger, statsD: StatsD)
-  extends Program("effs-again") with EffLogger {
+  extends Program("effs-again") {
 
   import cats._, data._
   import org.atnos.eff._, all._
   import org.atnos.eff.syntax.all._
   import StatsDEffect._
+  import LoggerEffect._
 
   type ConfigReader[A] = Reader[Config, A]
 
@@ -66,7 +67,7 @@ class Program2(config: Config, logger: Logger, statsD: StatsD)
   def compute(): Long = {
     withTimer
       .runReader(config)
-      .runWriterUnsafe[Logger.LogEntry](logger.log)
+      .runLoggerUnsafe(logger)
       .runStatsDUnsafe(statsD)
       .execSafe
       .run.toTry.get
