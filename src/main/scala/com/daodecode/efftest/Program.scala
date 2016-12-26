@@ -26,6 +26,10 @@ class Program1(config: Config, logger: Logger, statsD: StatsD) extends Program("
       val result = someCompute(a, b)
       statsD.increment(s"$label.result", result)
       result
+    } catch {
+      case t: Throwable =>
+        logger.error("Caught exception ", Some(t))
+        0L
     } finally {
       statsD.timing("compute.time", System.currentTimeMillis() - start)
     }
@@ -48,8 +52,8 @@ class Program2(config: Config, logger: Logger, statsD: StatsD)
 
   type Stack = Fx.fx4[ConfigReader, LogWriter, StatsdWriter, Safe]
 
-  def computer[R: _config : _log : _statsd : _Safe]: Eff[R, Long] =
-    for {
+  def computer[R: _config : _log : _statsd : _Safe]: Eff[R, Long] = {
+    (for {
       cfg <- ask
       _ <- debug("reading a and b")
       a <- protect(cfg.long("a"))
@@ -60,9 +64,14 @@ class Program2(config: Config, logger: Logger, statsD: StatsD)
       _ <- counter(s"$label.b", b)
       result <- protect(someCompute(a, b))
       _ <- counter(s"$label.result", result)
-    } yield result
+    } yield result) whenFailed { t =>
+      for {
+        _ <- error("Caught exception ", t)
+      } yield 0L
+    }
+  }
 
-  def withTimer = withTiming("compute.time")(computer[Stack])
+  def withTimer: Eff[Stack, Long] = withTiming("compute.time")(computer[Stack])
 
   def compute(): Long = {
     withTimer
@@ -89,8 +98,8 @@ object ProgramApp extends App {
     println(s"===========PROGRAM [${p.name}] FINISHED===========")
   }
 
-  val cfg = MapConfig("a" -> 1231L, "b" -> -23412L, "statsd.label" -> "boo")
-//    val cfg = MapConfig("a" -> 1231L, "b1" -> 0L, "statsd.label" -> "boo")
+//    val cfg = MapConfig("a" -> 1231L, "b" -> -23412L, "statsd.label" -> "boo")
+  val cfg = MapConfig("a" -> 1231L, "b" -> 0L, "statsd.label" -> "boo")
 
   runProgram(new Program1(
     config = cfg,
