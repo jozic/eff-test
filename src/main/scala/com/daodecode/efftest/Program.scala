@@ -59,7 +59,7 @@ class Program2(config: Config, logger: Logger, statsD: StatsD)
       a <- protect(cfg.long("a"))
       b <- protect(cfg.long("b"))
       _ <- info(s"a is [$a], b is [$b]")
-      label <- pure(cfg.string("statsd.label"))
+      label <- protect(cfg.string("statsd.label"))
       _ <- counter(s"$label.a", a)
       _ <- counter(s"$label.b", b)
       result <- protect(someCompute(a, b))
@@ -99,7 +99,7 @@ object ProgramApp extends App {
   }
 
 //    val cfg = MapConfig("a" -> 1231L, "b" -> -23412L, "statsd.label" -> "boo")
-  val cfg = MapConfig("a" -> 1231L, "b" -> 0L, "statsd.label" -> "boo")
+  val cfg = MapConfig("a" -> 1231L, "b" -> 0L, "statsd.label2" -> "boo")
 
   runProgram(new Program1(
     config = cfg,
