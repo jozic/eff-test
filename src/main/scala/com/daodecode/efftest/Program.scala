@@ -27,8 +27,8 @@ class Program1(config: Config, logger: Logger, statsD: StatsD) extends Program("
       statsD.increment(s"$label.result", result)
       result
     } catch {
-      case t: Throwable =>
-        logger.error("Caught exception ", Some(t))
+      case a: ArithmeticException =>
+        logger.error("Caught exception ", Some(a))
         0L
     } finally {
       statsD.timing("compute.time", System.currentTimeMillis() - start)
@@ -64,10 +64,11 @@ class Program2(config: Config, logger: Logger, statsD: StatsD)
       _ <- counter(s"$label.b", b)
       result <- protect(someCompute(a, b))
       _ <- counter(s"$label.result", result)
-    } yield result) whenFailed { t =>
-      for {
-        _ <- error("Caught exception ", t)
-      } yield 0L
+    } yield result) whenException {
+      case t: ArithmeticException =>
+        for {
+          _ <- error("Caught exception ", t)
+        } yield 0L
     }
   }
 
@@ -93,13 +94,13 @@ object ProgramApp extends App {
       println(s"Final result it [$result]")
     } catch {
       case t: Throwable =>
-        println(s"GOT EXCEPTION: ${t.getMessage}")
+        println(s"PROGRAM FAILED WITH EXCEPTION: ${t.getMessage}")
     }
     println(s"===========PROGRAM [${p.name}] FINISHED===========")
   }
 
-//    val cfg = MapConfig("a" -> 1231L, "b" -> -23412L, "statsd.label" -> "boo")
-  val cfg = MapConfig("a" -> 1231L, "b" -> 0L, "statsd.label2" -> "boo")
+//  val cfg = MapConfig("a" -> 1231L, "b" -> -23412L, "statsd.label" -> "boo")
+    val cfg = MapConfig("a" -> 1231L, "b2" -> 0L, "statsd.label" -> "boo")
 
   runProgram(new Program1(
     config = cfg,
